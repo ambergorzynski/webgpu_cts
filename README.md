@@ -1,6 +1,6 @@
 # WebGPU Conformance Test Suite
 
-This is the conformance test suite for WebGPU.
+This is a fork of the conformance test suite for WebGPU.
 It tests the behaviors defined by the [WebGPU specification](https://gpuweb.github.io/gpuweb/).
 
 The contents of this test suite are considered **normative**; implementations must pass
@@ -10,13 +10,36 @@ This test suite can be embedded inside [WPT](https://github.com/web-platform-tes
 
 ## [Launch the standalone CTS runner / test plan viewer](https://gpuweb.github.io/cts/standalone/)
 
-## Contributing
+# Run custom WGSL shaders using the CTS
 
-Please read the [introductory guidelines](docs/intro/README.md) before contributing.
-Other documentation may be found in [`docs/`](docs/) and in the [helper index](https://gpuweb.github.io/cts/docs/tsdoc/) ([source](docs/helper_index.txt)).
+Install `depot tools`, which manages Dawn's dependencies.
+```$
+git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git
+export PATH=/path/to/depot_tools:$PATH
+```
 
-Read [CONTRIBUTING.md](CONTRIBUTING.md) on licensing.
+Check out and build a copy of Dawn with node bindings enabled. This has been tested with Dawn commit `a4052b678`.
+```$
+git clone https://dawn.googlesource.com/dawn && cd dawn
+git checkout a4052b678
 
-For realtime communication about WebGPU spec and test, join the
-[#WebGPU:matrix.org room](https://app.element.io/#/room/#WebGPU:matrix.org)
-on Matrix.
+cp scripts/standalone-with-node.gclient .gclient
+gclient sync
+
+mkdir <build-output-path>
+cd <build-output-path>
+cmake <dawn-root-path> -GNinja -DDAWN_BUILD_NODE_BINDINGS=1
+ninja dawn.node
+```
+
+Edit the paths to your and run the WGSLsmith tests as follows:
+```$
+DAWN=/path/to/dawn_root
+CTS=/path/to/webgpu_cts
+
+$DAWN/tools/run run-cts \
+    --verbose \
+    --bin=$DAWN/out/Debug \
+    --cts=$CTS \
+    'webgpu:wgslsmith,*'
+```
