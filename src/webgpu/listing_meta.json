@@ -2974,5 +2974,6 @@
   "webgpu:web_platform,worker,worker:dedicated_worker:*": { "subcaseMS": 245.901 },
   "webgpu:web_platform,worker,worker:service_worker:*": { "subcaseMS": 102.800 },
   "webgpu:web_platform,worker,worker:shared_worker:*": { "subcaseMS": 26.801 },
+  "webgpu:wgslsmith,wgslsmith:basic_compute_wgslsmith:*": { "subcaseMS": 206.356 },
   "_end": ""
 }

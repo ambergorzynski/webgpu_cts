@@ -1,3 +1,6 @@
+export const input = [0, 0, 0, 0];
+export const expected = [1, 2, 3, 42];
+
 export const shaderCode = `
 
 @group(0) @binding(0)
