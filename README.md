@@ -12,6 +12,13 @@ This test suite can be embedded inside [WPT](https://github.com/web-platform-tes
 
 # Run custom WGSL shaders using the CTS
 
+Clone this repo and switch to branch `wgslsmith_tests`:
+```$
+git clone https://github.com/ambergorzynski/webgpu_cts.git
+cd webgpu_cts
+git switch wgslsmith_tests
+```
+
 Install `depot tools`, which manages Dawn's dependencies.
 ```$
 git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git
