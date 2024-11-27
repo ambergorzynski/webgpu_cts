@@ -5,21 +5,14 @@ export const description = `Test WGSLsmith compute shaders`;
 import { makeTestGroup } from '../../common/framework/test_group.js';
 import { GPUTest } from '../gpu_test.js';
 import { checkElementsEqual } from '../util/check_contents.js';
+import { shaderCode } from './shader.js'
 
 export const g = makeTestGroup(GPUTest);
 
 g.test('basic_compute_wgslsmith')
   .desc(`Test a trivial WGSLsmith compute shader`)
   .fn(async t => {
-    const code = `
-
-@group(0) @binding(0)
-var<storage, read_write> v : vec4u;
-
-@compute @workgroup_size(1)
-fn main() {
-  v = vec4u(1,2,3,42);
-}`;
+    const code = shaderCode;
 
     const pipeline = t.device.createComputePipeline({
       layout: 'auto',
