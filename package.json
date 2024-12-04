@@ -78,7 +78,8 @@
     "prettier": "~3.0.3",
     "screenshot-ftw": "^1.0.5",
     "serve-index": "^1.9.1",
-    "ts-node": "^10.9.1",
+    "ts-node": "^10.9.2",
+    "tsx": "^4.19.2",
     "typedoc": "^0.25.3",
     "typescript": "~5.2.2"
   }
