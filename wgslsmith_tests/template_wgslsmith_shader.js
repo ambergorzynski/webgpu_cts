@@ -1,6 +1,6 @@
-export const input = [0,0,0,0];
+export const input = [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0];
 
-export const expected = [0,0,0,0];
+export const expected = [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0];
     
 export const shaderCode = `
 
