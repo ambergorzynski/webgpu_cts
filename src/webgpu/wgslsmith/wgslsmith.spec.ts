@@ -4,7 +4,7 @@ import { makeTestGroup } from '../../common/framework/test_group.js';
 import { GPUTest } from '../gpu_test.js';
 import { checkElementsEqual } from '../util/check_contents.js';
 
-import { shaderCode, input, expected } from './shader_wgslsmith.js'
+import { shaderCode, input, expected } from './shader.js'
 
 export const g = makeTestGroup(GPUTest);
 
