@@ -170,6 +170,9 @@ if (verbose) {
     expectations: TestQueryWithExpectation[] = []
   ): Promise<LiveTestCaseResult> {
     const name = testcase.query.toString();
+
+    process.env.DREDD_MUTANT_TRACKING_FILE="/data/dev/dredd-webgpu-testing/scripts/test_wise_mutant_tracking/" + name + ".txt"
+
     const [rec, res] = log.record(name);
     await testcase.run(rec, expectations);
     return res;
