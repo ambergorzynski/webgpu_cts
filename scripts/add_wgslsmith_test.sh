@@ -3,8 +3,8 @@
 # This script adds new WGSLsmith tests to the CTS build so that they can be run using the CTS CLI
 
 CTS='/data/dev/webgpu_cts_fork'
-WGSLSMITH_JS=$CTS/wgslsmith_tests/shader.js # replace with argument
-WGSLSMITH_JS_CONVERTED=$CTS/wgslsmith_tests/shader_converted.js # replace with argument
+SHADER=$CTS/wgslsmith_tests/shader.wgsl # replace with argument
+OUTPUT=$CTS/wgslsmith_tests/shader_converted.js # replace with argument
 DEST_JS=$CTS/out-node/webgpu/wgslsmith/shader_wgslsmith.js
 TEST=$CTS/scripts/run_wgslsmith_tests_cmdline.sh
 
@@ -26,7 +26,7 @@ fi
 echo "Initial build exists"
 
 # Convert shader format
-python $CONVERT ${WGSLSMITH_JS} ${WGSLSMITH_JS_CONVERTED}
+python $CONVERT ${SHADER} ${INPUTS} ${OUTPUT}
 
 # Copy shader to out-node (make a backup of original shader first)
 mv ${DEST_JS} ${DEST_JS}_backup
