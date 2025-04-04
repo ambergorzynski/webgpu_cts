@@ -167,11 +167,12 @@ if (verbose) {
 
   async function runTestcase(
     testcase: TestTreeLeaf,
+    testname: String,
     expectations: TestQueryWithExpectation[] = []
   ): Promise<LiveTestCaseResult> {
     const name = testcase.query.toString();
 
-    process.env.DREDD_MUTANT_TRACKING_FILE="/data/dev/dredd-webgpu-testing/scripts/test_wise_mutant_tracking/" + name + ".txt"
+    process.env.DREDD_MUTANT_TRACKING_FILE="/data/dev/dredd-webgpu-testing/llvmpipe/output/covered_by_cts/test_wise_tracking/tracking_files/" + testname + ".txt"
 
     const [rec, res] = log.record(name);
     await testcase.run(rec, expectations);
@@ -204,7 +205,10 @@ if (verbose) {
           response.end(`load failed with error: ${err}\n${(err as Error).stack}`);
         }
       } else if (request.url.startsWith(runPrefix)) {
-        const name = request.url.substr(runPrefix.length);
+        // Format is runPrefix?testcase?testname
+        const name = request.url.substring(runPrefix.length, request.url.lastIndexOf('?'));
+        const testname = request.url.substring(request.url.lastIndexOf('?') + 1,);
+
         try {
           const testcase = testcases.get(name);
           if (testcase) {
@@ -212,7 +216,7 @@ if (verbose) {
               codeCoverage.begin();
             }
             const start = performance.now();
-            const result = await runTestcase(testcase);
+            const result = await runTestcase(testcase, testname);
             const durationMS = performance.now() - start;
             const coverageData = codeCoverage !== undefined ? codeCoverage.end() : undefined;
             let message = '';
