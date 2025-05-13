@@ -32,6 +32,7 @@ Options:
   --gpu-provider-flag       Flag to set on the gpu-provider as <flag>=<value>
   --unroll-const-eval-loops Unrolls loops in constant-evaluation shader execution tests
   --u                       Flag to set on the gpu-provider as <flag>=<value>
+  --tracking                Flag to enable mutant tracking
 
 Provides an HTTP server used for running tests via an HTTP RPC interface
 First, load some tree or subtree of tests:
@@ -76,10 +77,12 @@ if (!sys.existsSync('src/common/runtime/cmdline.ts')) {
   console.log('Must be run from repository root');
   usage(1);
 }
+
 setBaseResourcePath('out-node/resources');
 
 Colors.enabled = false;
 
+let mutantTracking = false;
 let emitCoverage = false;
 let verbose = false;
 let gpuProviderModule: GPUProviderModule | undefined = undefined;
@@ -111,6 +114,8 @@ for (let i = 0; i < sys.args.length; ++i) {
       usage(1);
     } else if (a === '--verbose') {
       verbose = true;
+    } else if (a === '--mutant-tracking' ) {
+      mutantTracking= true;
     } else {
       console.log(`unrecognized flag: ${a}`);
     }
@@ -172,8 +177,10 @@ if (verbose) {
   ): Promise<LiveTestCaseResult> {
     const name = testcase.query.toString();
 
-    process.env.DREDD_MUTANT_TRACKING_FILE="/data/dev/dredd-webgpu-testing/llvmpipe/output/covered_by_cts/test_wise_tracking/tracking_files/" + testname + ".txt"
-
+    if (testname != "") {
+      process.env.DREDD_MUTANT_TRACKING_FILE="/data/dev/dredd-webgpu-testing/llvmpipe/output/covered_by_cts/test_wise_tracking/tracking_files/" + testname + ".txt"
+    }
+    
     const [rec, res] = log.record(name);
     await testcase.run(rec, expectations);
     return res;
@@ -205,9 +212,18 @@ if (verbose) {
           response.end(`load failed with error: ${err}\n${(err as Error).stack}`);
         }
       } else if (request.url.startsWith(runPrefix)) {
-        // Format is runPrefix?testcase?testname
-        const name = request.url.substring(runPrefix.length, request.url.lastIndexOf('?'));
-        const testname = request.url.substring(request.url.lastIndexOf('?') + 1,);
+        // Format is runPrefix?testcase?testname for tracking
+        // Format is runPrefix?testcase for non-tracking
+        let name : string = "";
+        let testname : string = "";
+
+        if (mutantTracking) {
+          name = request.url.substring(runPrefix.length, request.url.lastIndexOf('?'));
+          testname = request.url.substring(request.url.lastIndexOf('?') + 1,);
+        }
+        else {
+          name = request.url.substring(runPrefix.length);
+        }
 
         try {
           const testcase = testcases.get(name);
