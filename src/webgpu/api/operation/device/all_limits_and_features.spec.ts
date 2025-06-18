@@ -8,10 +8,13 @@ import {
   GPUTestSubcaseBatchState,
   initUncanonicalizedDeviceDescriptor,
 } from '../../../gpu_test.js';
-import { CanonicalDeviceDescriptor, DescriptorModifierFn } from '../../../util/device_pool.js';
+import { CanonicalDeviceDescriptor, DescriptorModifier } from '../../../util/device_pool.js';
 
 /**
  * Gets the adapter limits as a standard JavaScript object.
+ * MAINTENANCE_TODO: Remove this and use the same function from gpu_test.ts once minSubgroupSize is removed
+ * The reason this is separate now is we want this test to fail. `mnSubgroupSize` should never have
+ * be added and this test exists to see that the same mistake doesn't happen in the future.
  */
 function getAdapterLimitsAsDeviceRequiredLimits(adapter: GPUAdapter) {
   const requiredLimits: Record<string, GPUSize64> = {};
@@ -36,18 +39,28 @@ function setAllLimitsToAdapterLimitsAndAddAllFeatures(
 }
 
 /**
- * Used by MaxLimitsTest to request a device with all the max limits of the adapter.
+ * Used to request a device with all the max limits of the adapter.
  */
 export class AllLimitsAndFeaturesGPUTestSubcaseBatchState extends GPUTestSubcaseBatchState {
-  override selectDeviceOrSkipTestCase(
+  override requestDeviceWithRequiredParametersOrSkip(
     descriptor: DeviceSelectionDescriptor,
-    descriptorModifierFn?: DescriptorModifierFn
+    descriptorModifier?: DescriptorModifier
   ): void {
-    const wrapper = (adapter: GPUAdapter, desc: CanonicalDeviceDescriptor | undefined) => {
-      desc = descriptorModifierFn ? descriptorModifierFn(adapter, desc) : desc;
-      return setAllLimitsToAdapterLimitsAndAddAllFeatures(adapter, desc);
+    const mod: DescriptorModifier = {
+      descriptorModifier(adapter: GPUAdapter, desc: CanonicalDeviceDescriptor | undefined) {
+        desc = descriptorModifier?.descriptorModifier
+          ? descriptorModifier.descriptorModifier(adapter, desc)
+          : desc;
+        return setAllLimitsToAdapterLimitsAndAddAllFeatures(adapter, desc);
+      },
+      keyModifier(baseKey: string) {
+        return `${baseKey}:AllLimitsAndFeaturesTest`;
+      },
     };
-    super.selectDeviceOrSkipTestCase(initUncanonicalizedDeviceDescriptor(descriptor), wrapper);
+    super.requestDeviceWithRequiredParametersOrSkip(
+      initUncanonicalizedDeviceDescriptor(descriptor),
+      mod
+    );
   }
 }
 

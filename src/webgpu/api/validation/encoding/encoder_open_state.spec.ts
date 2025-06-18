@@ -6,11 +6,12 @@ GPURenderPassEncoder when the encoder is not finished.
 import { makeTestGroup } from '../../../../common/framework/test_group.js';
 import { keysOf } from '../../../../common/util/data_tables.js';
 import { unreachable } from '../../../../common/util/util.js';
-import { ValidationTest } from '../validation_test.js';
+import { AllFeaturesMaxLimitsGPUTest } from '../../../gpu_test.js';
+import * as vtu from '../validation_test_utils.js';
 
 import { beginRenderPassWithQuerySet } from './queries/common.js';
 
-class F extends ValidationTest {
+class F extends AllFeaturesMaxLimitsGPUTest {
   createRenderPipelineForTest(): GPURenderPipeline {
     return this.device.createRenderPipeline({
       layout: 'auto',
@@ -57,10 +58,7 @@ class F extends ValidationTest {
 
 export const g = makeTestGroup(F);
 
-// MAINTENANCE_TODO: Remove writeTimestamp from here once it's (hopefully) added back to the spec.
-type EncoderCommands =
-  | keyof Omit<GPUCommandEncoder, '__brand' | 'label' | 'finish'>
-  | 'writeTimestamp';
+type EncoderCommands = keyof Omit<GPUCommandEncoder, '__brand' | 'label' | 'finish'>;
 const kEncoderCommandInfo: {
   readonly [k in EncoderCommands]: {};
 } = {
@@ -74,7 +72,6 @@ const kEncoderCommandInfo: {
   insertDebugMarker: {},
   popDebugGroup: {},
   pushDebugGroup: {},
-  writeTimestamp: {},
   resolveQuerySet: {},
 };
 const kEncoderCommands = keysOf(kEncoderCommandInfo);
@@ -155,8 +152,6 @@ g.test('non_pass_commands')
     `
   Test that functions of GPUCommandEncoder generate a validation error if the encoder is already
   finished.
-
-  TODO: writeTimestamp is removed from the spec so it's skipped if it TypeErrors.
   `
   )
   .params(u =>
@@ -165,13 +160,6 @@ g.test('non_pass_commands')
       .beginSubcases()
       .combine('finishBeforeCommand', [false, true])
   )
-  .beforeAllSubcases(t => {
-    switch (t.params.command) {
-      case 'writeTimestamp':
-        t.selectDeviceOrSkipTestCase('timestamp-query');
-        break;
-    }
-  })
   .fn(t => {
     const { command, finishBeforeCommand } = t.params;
 
@@ -198,7 +186,7 @@ g.test('non_pass_commands')
     });
 
     const querySet = t.createQuerySetTracked({
-      type: command === 'writeTimestamp' ? 'timestamp' : 'occlusion',
+      type: 'occlusion',
       count: 1,
     });
 
@@ -270,14 +258,6 @@ g.test('non_pass_commands')
             encoder.popDebugGroup();
           }
           break;
-        case 'writeTimestamp':
-          try {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            (encoder as any).writeTimestamp(querySet, 0);
-          } catch (ex) {
-            t.skipIf(ex instanceof TypeError, 'writeTimestamp is actually not available');
-          }
-          break;
         case 'resolveQuerySet':
           {
             encoder.resolveQuerySet(querySet, 0, 1, dstBuffer, 0);
@@ -304,14 +284,13 @@ g.test('render_pass_commands')
       .beginSubcases()
       .combine('finishBeforeCommand', [false, true])
   )
-  .beforeAllSubcases(t => {
-    const { command } = t.params;
-    if (command === 'multiDrawIndirect' || command === 'multiDrawIndexedIndirect') {
-      t.selectDeviceOrSkipTestCase('chromium-experimental-multi-draw-indirect' as GPUFeatureName);
-    }
-  })
   .fn(t => {
     const { command, finishBeforeCommand } = t.params;
+    if (command === 'multiDrawIndirect' || command === 'multiDrawIndexedIndirect') {
+      t.skipIfDeviceDoesNotHaveFeature(
+        'chromium-experimental-multi-draw-indirect' as GPUFeatureName
+      );
+    }
 
     const querySet = t.createQuerySetTracked({ type: 'occlusion', count: 1 });
     const encoder = t.device.createCommandEncoder();
@@ -566,7 +545,7 @@ g.test('compute_pass_commands')
       usage: GPUBufferUsage.INDIRECT,
     });
 
-    const computePipeline = t.createNoOpComputePipeline();
+    const computePipeline = vtu.createNoOpComputePipeline(t);
 
     const bindGroup = t.createBindGroupForTest();
 
