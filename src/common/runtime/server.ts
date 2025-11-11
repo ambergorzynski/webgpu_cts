@@ -35,7 +35,7 @@ Options:
   --force-fallback-adapter  Force a fallback adapter
   --log-to-websocket        Log to a websocket
   --u                       Flag to set on the gpu-provider as <flag>=<value>
-  --tracking                Flag to enable mutant tracking
+  --mutant-tracking         Path to mutant tracking folder to enable test-wise tracking
 
 Provides an HTTP server used for running tests via an HTTP RPC interface
 First, load some tree or subtree of tests:
@@ -86,6 +86,7 @@ setBaseResourcePath('out-node/resources');
 Colors.enabled = false;
 
 let mutantTracking = false;
+let mutantTrackingPath = '/home/ubuntu/dev/dredd-webgpu-testing/data'
 let emitCoverage = false;
 let verbose = false;
 let gpuProviderModule: GPUProviderModule | undefined = undefined;
@@ -123,6 +124,10 @@ for (let i = 0; i < sys.args.length; ++i) {
       verbose = true;
     } else if (a === '--mutant-tracking' ) {
       mutantTracking= true;
+      console.log("Hello from mutant tracking!");
+      //TODO: pass path as argument
+      mutantTrackingPath = '/home/ubuntu/dev/dredd-webgpu-testing/data/tracking_files';
+      //const mutantTrackingPath = sys.args[++i];
     } else {
       console.log(`unrecognized flag: ${a}`);
     }
@@ -182,9 +187,19 @@ if (verbose) {
     expectations: TestQueryWithExpectation[] = []
   ): Promise<LiveTestCaseResult> {
     const name = testcase.query.toString();
-
-    if (testname != "") {
-      process.env.DREDD_MUTANT_TRACKING_FILE="/data/dev/dredd-webgpu-testing/llvmpipe/output/covered_by_cts/test_wise_tracking/tracking_files/" + testname + ".txt"
+	console.log("hello from runTestcase\n")
+	if (mutantTracking) {
+	    if (testname == "") {
+		    console.log("Should never get here");
+		    console.log(name);
+	    }
+	    
+      	    else {
+		    console.log("Got testname!");
+		    console.log(testname);
+		    console.log(name);
+		    process.env.DREDD_MUTANT_TRACKING_FILE= mutantTrackingPath + '/' + testname + ".txt";
+    		}
     }
     
     const [rec, res] = log.record(name);
@@ -198,6 +213,10 @@ if (verbose) {
         response.end('invalid url');
         return;
       }
+	
+	// Create new GPU device for each test    
+	//setGPUProvider(() => gpuProviderModule!.create(gpuProviderFlags));
+   
 
       const loadCasesPrefix = '/load?';
       const runPrefix = '/run?';
