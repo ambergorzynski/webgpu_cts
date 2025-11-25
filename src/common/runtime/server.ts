@@ -128,7 +128,6 @@ for (let i = 0; i < sys.args.length; ++i) {
       verbose = true;
     } else if (a === '--mutant-tracking' ) {
       mutantTracking= true;
-      console.log("Hello from mutant tracking!");
       //TODO: pass path as argument
       mutantTrackingPath = '/home/ubuntu/dev/dredd-webgpu-testing/data/tracking_files';
       //const mutantTrackingPath = sys.args[++i];
@@ -191,17 +190,8 @@ if (verbose) {
     expectations: TestQueryWithExpectation[] = []
   ): Promise<LiveTestCaseResult> {
     const name = testcase.query.toString();
-	console.log("hello from runTestcase\n")
 	if (mutantTracking) {
-	    if (testname == "") {
-		    console.log("Should never get here");
-		    console.log(name);
-	    }
-	    
-      	    else {
-		    console.log("Got testname!");
-		    console.log(testname);
-		    console.log(name);
+      	    if (testname != "") {
 		    process.env.DREDD_MUTANT_TRACKING_FILE= mutantTrackingPath + '/' + testname + ".txt";
     		}
     }
