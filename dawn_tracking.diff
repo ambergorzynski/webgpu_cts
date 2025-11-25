@@ -1,0 +1,165 @@
+diff --git a/tools/src/cmd/run-cts/node/cmd.go b/tools/src/cmd/run-cts/node/cmd.go
+index befe7979bb..1799fb75a8 100644
+--- a/tools/src/cmd/run-cts/node/cmd.go
++++ b/tools/src/cmd/run-cts/node/cmd.go
+@@ -61,6 +61,7 @@ type flags struct {
+ 	skipVSCodeInfo       bool
+ 	enforceDefaultLimits bool
+ 	blockAllFeatures     bool
++	mutantTracking	     bool
+ 	dawn                 node.Flags
+ }
+ 
+@@ -113,6 +114,7 @@ func (c *cmd) RegisterFlags(ctx context.Context, cfg common.Config) ([]string, e
+ 	flag.BoolVar(&c.flags.skipVSCodeInfo, "skip-vs-code-info", false, "skips emitting VS Code information")
+ 	flag.BoolVar(&c.flags.enforceDefaultLimits, "enforce-default-limits", false, "enforce the default limits (note: powerPreference tests may fail)")
+ 	flag.BoolVar(&c.flags.blockAllFeatures, "block-all-features", false, "block all features (except 'core-features-and-limits')")
++	flag.BoolVar(&c.flags.mutantTracking, "mutant-tracking", false, "record covered mutants in tracking file")
+ 
+ 	return []string{"[query]"}, nil
+ }
+@@ -142,7 +144,7 @@ func (c *cmd) Run(ctx context.Context, cfg common.Config) error {
+ 	}
+ 	fmt.Printf("Testing %d test cases...\n", len(testCases))
+ 
+-	var runner func(ctx context.Context, testCases []common.TestCase, results chan<- common.Result, fsReader oswrapper.FilesystemReader)
++	var runner func(ctx context.Context, testCases []common.TestCase, results chan<- common.Result, fsReader oswrapper.FilesystemReader, tracking bool)
+ 	if c.flags.isolated {
+ 		fmt.Println("Running in parallel isolated...")
+ 		runner = c.runTestCasesWithCmdline
+@@ -153,7 +155,7 @@ func (c *cmd) Run(ctx context.Context, cfg common.Config) error {
+ 
+ 	resultStream := make(chan common.Result, 256)
+ 	go func() {
+-		runner(ctx, testCases, resultStream, cfg.OsWrapper)
++		runner(ctx, testCases, resultStream, cfg.OsWrapper, c.flags.mutantTracking)
+ 		close(resultStream)
+ 	}()
+ 
+diff --git a/tools/src/cmd/run-cts/node/cmdline.go b/tools/src/cmd/run-cts/node/cmdline.go
+index 4c3e8302d8..07c1fa3330 100644
+--- a/tools/src/cmd/run-cts/node/cmdline.go
++++ b/tools/src/cmd/run-cts/node/cmdline.go
+@@ -50,7 +50,7 @@ import (
+ // between tests.
+ // Up to c.flags.numRunners tests will be run concurrently.
+ func (c *cmd) runTestCasesWithCmdline(
+-	ctx context.Context, testCases []common.TestCase, results chan<- common.Result, fsReader oswrapper.FilesystemReader) {
++	ctx context.Context, testCases []common.TestCase, results chan<- common.Result, fsReader oswrapper.FilesystemReader, tracking bool) {
+ 	// Create a chan of test indices.
+ 	// This will be read by the test runner goroutines.
+ 	testCaseIndices := make(chan int, 256)
+diff --git a/tools/src/cmd/run-cts/node/server.go b/tools/src/cmd/run-cts/node/server.go
+index abc7c33c0e..deea348b1b 100644
+--- a/tools/src/cmd/run-cts/node/server.go
++++ b/tools/src/cmd/run-cts/node/server.go
+@@ -47,13 +47,60 @@ import (
+ 	"dawn.googlesource.com/dawn/tools/src/utils"
+ )
+ 
++func saveMappingToFile(filename string, testmap map[string]string) {
++
++	f, err := os.Create(filename)
++	if err != nil {
++		panic(err)
++	}
++	defer f.Close()
++
++	_, err = f.WriteString("{")
++	if err != nil {
++		panic(err)
++	}
++
++	first := true
++	for k, v := range testmap {
++		line := fmt.Sprintf(`"%s":"%s"`, strings.ReplaceAll(k, `"`, `\"`), v)
++		if !first {
++			line = ",\n" + line
++		}
++		_, err := f.WriteString(line)
++		if err != nil {
++			panic(err)
++		}
++		first = false
++	}
++
++	_, err = f.WriteString("}")
++	if err != nil {
++		panic(err)
++	}
++
++	f.Sync()
++}
++
++
+ // TODO(crbug.com/416755658): Add unittest coverage when there is a way to fake
+ // the node process.
+ // runTestCasesWithServers spawns c.flags.NumRunners server instances to run all
+ // the test cases in testCases. The results of the tests are streamed to results.
+ // Blocks until all the tests have been run.
+ func (c *cmd) runTestCasesWithServers(
+-	ctx context.Context, testCases []common.TestCase, results chan<- common.Result, fsReader oswrapper.FilesystemReader) {
++	ctx context.Context, testCases []common.TestCase, results chan<- common.Result, fsReader oswrapper.FilesystemReader, tracking bool) {
++
++	testIDMap := make(map[string]string)
++
++	if (tracking) {
++		// Create mapping from test to id (used to name the test file)
++		for i:= 0; i < len(testCases); i++ {
++			testIDMap[string(testCases[i])] = fmt.Sprintf("test_id_%d",i)
++		}
++		// Store test case index mapping in file
++		saveMappingToFile("/home/ubuntu/dev/dredd-webgpu-testing/data/mapping_test_to_id.json", testIDMap)
++	}
++
+ 	// Create a chan of test indices.
+ 	// This will be read by the test runner goroutines.
+ 	testCaseIndices := make(chan int, 256)
+@@ -71,7 +118,7 @@ func (c *cmd) runTestCasesWithServers(
+ 		wg.Add(1)
+ 		go func() {
+ 			defer wg.Done()
+-			if err := c.runServer(ctx, id, testCases, testCaseIndices, results, fsReader); err != nil {
++			if err := c.runServer(ctx, id, testCases, testCaseIndices, results, fsReader, testIDMap); err != nil {
+ 				results <- common.Result{
+ 					Status: common.Fail,
+ 					Error:  fmt.Errorf("Test server error: %w", err),
+@@ -96,7 +143,8 @@ func (c *cmd) runServer(
+ 	testCases []common.TestCase,
+ 	testCaseIndices <-chan int,
+ 	results chan<- common.Result,
+-	fsReader oswrapper.FilesystemReader) error {
++	fsReader oswrapper.FilesystemReader,
++	testIDMap map[string]string) error {
+ 
+ 	var port int
+ 	testCaseLog := &bytes.Buffer{}
+@@ -135,6 +183,9 @@ func (c *cmd) runServer(
+ 		if c.flags.blockAllFeatures {
+ 			args = append(args, "--block-all-features")
+ 		}
++		if c.flags.mutantTracking {
++			args= append(args, "--mutant-tracking")
++		}
+ 		if c.flags.debugCTS {
+ 			args = append(args, "--debug")
+ 		}
+@@ -216,7 +267,17 @@ func (c *cmd) runServer(
+ 			CoverageData string
+ 			DurationMS   float32
+ 		}
+-		postResp, err := http.Post(fmt.Sprintf("http://localhost:%v/run?%v", port, testCases[idx]), "", &bytes.Buffer{})
++		var request string
++		if c.flags.mutantTracking {
++			fileName := fmt.Sprintf("/home/ubuntu/dev/dredd-webgpu-testing/data/tracking_files/track_%d.txt", idx)
++			os.Setenv("DREDD_MUTANT_TRACKING_FILE", fileName)
++			request = fmt.Sprintf("http://localhost:%v/run?%v?%v", port, testCases[idx], testIDMap[string(testCases[idx])])
++		} else {
++			request = fmt.Sprintf("http://localhost:%v/run?%v", port, testCases[idx])
++		}
++
++		postResp, err := http.Post(request, "", &bytes.Buffer{})
++
+ 		if err != nil {
+ 			res.Error = fmt.Errorf("server POST failure. Restarting server... This can happen when there is a crash. Try running with --isolate.")
+ 			res.Status = common.Fail
