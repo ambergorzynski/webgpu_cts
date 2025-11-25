@@ -4,7 +4,7 @@ Tests for capability checking for features enabling optional texture formats.
 
 import { makeTestGroup } from '../../../../../common/framework/test_group.js';
 import { getGPU } from '../../../../../common/util/navigator_gpu.js';
-import { assert } from '../../../../../common/util/util.js';
+import { assert, hasFeature } from '../../../../../common/util/util.js';
 import { kCanvasTextureFormats } from '../../../../capability_info.js';
 import {
   kASTCCompressedTextureFormats,
@@ -336,7 +336,7 @@ g.test('storage_texture_binding_layout')
   })
   .fn(t => {
     const { format, enable_required_feature } = t.params;
-    t.skipIfTextureFormatNotUsableAsStorageTexture(format);
+    t.skipIfTextureFormatNotUsableWithStorageAccessMode('write-only', format);
 
     t.shouldThrow(enable_required_feature ? false : 'TypeError', () => {
       t.device.createBindGroupLayout({
@@ -551,11 +551,11 @@ g.test('check_capability_guarantees')
 
     const features = adapter.features;
 
-    const supportsBC = features.has('texture-compression-bc');
-    const supportsBCSliced3D = features.has('texture-compression-bc-sliced-3d');
-    const supportsASTC = features.has('texture-compression-astc');
-    const supportsASTCSliced3D = features.has('texture-compression-astc-sliced-3d');
-    const supportsETC2 = features.has('texture-compression-etc2');
+    const supportsBC = hasFeature(features, 'texture-compression-bc');
+    const supportsBCSliced3D = hasFeature(features, 'texture-compression-bc-sliced-3d');
+    const supportsASTC = hasFeature(features, 'texture-compression-astc');
+    const supportsASTCSliced3D = hasFeature(features, 'texture-compression-astc-sliced-3d');
+    const supportsETC2 = hasFeature(features, 'texture-compression-etc2');
 
     t.expect(
       supportsBC || (supportsETC2 && supportsASTC),

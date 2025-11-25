@@ -19,9 +19,10 @@ import {
   TypedArrayBufferView,
   TypedArrayBufferViewConstructor,
   unreachable,
+  hasFeature,
 } from '../common/util/util.js';
 
-import { kLimits, kQueryTypeInfo, WGSLLanguageFeature } from './capability_info.js';
+import { kPossibleLimits, kQueryTypeInfo, WGSLLanguageFeature } from './capability_info.js';
 import { InterpolationType, InterpolationSampling } from './constants.js';
 import {
   resolvePerAspectFormat,
@@ -29,17 +30,17 @@ import {
   EncodableTextureFormat,
   isCompressedTextureFormat,
   getRequiredFeatureForTextureFormat,
-  isTextureFormatUsableAsStorageFormat,
   isTextureFormatUsableAsRenderAttachment,
   isTextureFormatMultisampled,
   is32Float,
   isSintOrUintFormat,
   isTextureFormatResolvable,
-  isTextureFormatUsableAsReadWriteStorageTexture,
   isDepthTextureFormat,
   isStencilTextureFormat,
   textureViewDimensionAndFormatCompatibleForDevice,
   textureDimensionAndFormatCompatibleForDevice,
+  isTextureFormatUsableWithStorageAccessMode,
+  isTextureFormatUsableWithCopyExternalImageToTexture,
 } from './format_info.js';
 import { checkElementsEqual, checkElementsBetween } from './util/check_contents.js';
 import { CommandBufferMaker, EncoderType } from './util/command_buffer_maker.js';
@@ -352,7 +353,7 @@ export class GPUTestBase extends Fixture<GPUTestSubcaseBatchState> {
     return globalTestConfig.compatibility;
   }
 
-  makeLimitVariant(limit: (typeof kLimits)[number], variant: ValueTestVariant) {
+  makeLimitVariant(limit: (typeof kPossibleLimits)[number], variant: ValueTestVariant) {
     return makeValueTestVariant(this.device.limits[limit]!, variant);
   }
 
@@ -460,7 +461,10 @@ export class GPUTestBase extends Fixture<GPUTestSubcaseBatchState> {
    * Note: Try to use one of the more specific skipIf tests if possible.
    */
   skipIfDeviceDoesNotHaveFeature(feature: GPUFeatureName) {
-    this.skipIf(!this.device.features.has(feature), `device does not have feature: '${feature}'`);
+    this.skipIf(
+      !hasFeature(this.device.features, feature),
+      `device does not have feature: '${feature}'`
+    );
   }
 
   /**
@@ -497,7 +501,7 @@ export class GPUTestBase extends Fixture<GPUTestSubcaseBatchState> {
       }
       const feature = getRequiredFeatureForTextureFormat(format);
       this.skipIf(
-        !!feature && !this.device.features.has(feature),
+        !!feature && !hasFeature(this.device.features, feature),
         `texture format '${format}' requires feature: '${feature}'`
       );
     }
@@ -565,22 +569,17 @@ export class GPUTestBase extends Fixture<GPUTestSubcaseBatchState> {
     }
   }
 
-  skipIfTextureFormatNotUsableAsStorageTexture(...formats: (GPUTextureFormat | undefined)[]) {
-    for (const format of formats) {
-      if (format && !isTextureFormatUsableAsStorageFormat(this.device, format)) {
-        this.skip(`Texture with ${format} is not usable as a storage texture`);
-      }
-    }
-  }
-
-  skipIfTextureFormatNotUsableAsReadWriteStorageTexture(
+  skipIfTextureFormatNotUsableWithStorageAccessMode(
+    access: GPUStorageTextureAccess | 'read' | 'write' | 'read_write',
     ...formats: (GPUTextureFormat | undefined)[]
   ) {
     for (const format of formats) {
       if (!format) continue;
 
-      if (!isTextureFormatUsableAsReadWriteStorageTexture(this.device, format)) {
-        this.skip(`Texture with ${format} is not usable as a storage texture`);
+      if (!isTextureFormatUsableWithStorageAccessMode(this.device, format, access)) {
+        this.skip(
+          `Texture with ${format} is not usable as a storage texture with access ${access}`
+        );
       }
     }
   }
@@ -608,7 +607,7 @@ export class GPUTestBase extends Fixture<GPUTestSubcaseBatchState> {
       this.skipIf(isSintOrUintFormat(format), 'sint/uint formats are not blendable');
       if (is32Float(format)) {
         this.skipIf(
-          !this.device.features.has('float32-blendable'),
+          !hasFeature(this.device.features, 'float32-blendable'),
           `texture format '${format}' is not blendable`
         );
       }
@@ -621,7 +620,7 @@ export class GPUTestBase extends Fixture<GPUTestSubcaseBatchState> {
       this.skipIf(isSintOrUintFormat(format), 'sint/uint formats are not filterable');
       if (is32Float(format)) {
         this.skipIf(
-          !this.device.features.has('float32-filterable'),
+          !hasFeature(this.device.features, 'float32-filterable'),
           `texture format '${format}' is not filterable`
         );
       }
@@ -638,9 +637,23 @@ export class GPUTestBase extends Fixture<GPUTestSubcaseBatchState> {
         this.skipIfTextureFormatNotUsableAsRenderAttachment(format);
       }
       if (usage & GPUTextureUsage.STORAGE_BINDING) {
-        this.skipIfTextureFormatNotUsableAsStorageTexture(format);
+        this.skipIfTextureFormatNotUsableWithStorageAccessMode('write-only', format);
       }
     }
+  }
+
+  skipIfTextureFormatDoesNotSupportCopyTextureToBuffer(format: GPUTextureFormat) {
+    this.skipIf(
+      !this.canCallCopyTextureToBufferWithTextureFormat(format),
+      `can not use copyTextureToBuffer with ${format}`
+    );
+  }
+
+  skipIfTextureFormatPossiblyNotUsableWithCopyExternalImageToTexture(format: GPUTextureFormat) {
+    this.skipIf(
+      !isTextureFormatUsableWithCopyExternalImageToTexture(this.device, format),
+      `can not use copyExternalImageToTexture with ${format}`
+    );
   }
 
   /** Skips this test case if the `langFeature` is *not* supported. */
@@ -1207,6 +1220,23 @@ export class GPUTestBase extends Fixture<GPUTestSubcaseBatchState> {
           this.rec.debug(niceStack);
         }
       });
+    }
+  }
+
+  /**
+   * Expect a validation error or exception inside the callback.
+   *
+   * Tests should always do just one WebGPU call in the callback, to make sure that's what's tested.
+   */
+  expectValidationErrorOrException(
+    fn: () => void,
+    shouldError: boolean = true,
+    shouldThrow: boolean = true
+  ): void {
+    if (shouldThrow) {
+      this.shouldThrow(shouldError, fn);
+    } else {
+      this.expectValidationError(fn, shouldError);
     }
   }
 
