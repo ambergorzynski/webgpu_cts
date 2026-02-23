@@ -86,7 +86,7 @@ setBaseResourcePath('out-node/resources');
 Colors.enabled = false;
 
 let mutantTracking = false;
-let mutantTrackingPath = '/data/dev/dredd-webgpu-testing/data'
+let mutantTrackingPath: string | undefined = undefined;
 let emitCoverage = false;
 let verbose = false;
 let gpuProviderModule: GPUProviderModule | undefined = undefined;
@@ -128,9 +128,9 @@ for (let i = 0; i < sys.args.length; ++i) {
       verbose = true;
     } else if (a === '--mutant-tracking' ) {
       mutantTracking= true;
-      //TODO: pass path as argument
-      mutantTrackingPath = '/data/dev/dredd-webgpu-testing/data/tracking_files';
-      //const mutantTrackingPath = sys.args[++i];
+    } else if (a === '--mutant-output') {
+      const trackPath = sys.args[++i];
+      mutantTrackingPath = trackPath;
     } else {
       console.log(`unrecognized flag: ${a}`);
     }
